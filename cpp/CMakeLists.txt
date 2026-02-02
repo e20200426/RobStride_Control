@@ -20,12 +20,14 @@ include_directories(include)
 
 # Add executable
 add_executable(robstride-mit-position src/position_control.cpp)
+add_executable(position src/pp.cpp)
 
 # Link libraries
 target_link_libraries(robstride-mit-position pthread)
+target_link_libraries(position pthread)
 
 # Installation
-install(TARGETS robstride-mit-position
+install(TARGETS robstride-mit-position position
     RUNTIME DESTINATION bin
 )
 
