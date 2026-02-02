@@ -19,15 +19,17 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pthread")
 include_directories(include)
 
 # Add executable
-add_executable(robstride-mit-position src/position_control.cpp)
-add_executable(position src/pp.cpp)
+add_executable(mit-position 
+    src/MIT_control.cpp)
+
+add_executable(position_control 
+    src/PP_control.cpp)
 
 # Link libraries
-target_link_libraries(robstride-mit-position pthread)
-target_link_libraries(position pthread)
-
+target_link_libraries(mit-position pthread)
+target_link_libraries(position_control pthread)
 # Installation
-install(TARGETS robstride-mit-position position
+install(TARGETS mit-position position_control
     RUNTIME DESTINATION bin
 )
 
