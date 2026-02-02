@@ -1,65 +1,65 @@
 # RobStride Control C++
 
-C++ 实现 RobStride 电机控制库，提供高性能的实时控制功能。
+C++ implementation of the RobStride motor control library, providing high-performance real-time control capabilities.
 
-## 特性
+## Features
 
-- ⚡ **高性能**：200Hz 控制频率，1ms 延迟
-- 🔧 **直接控制**：基于 SocketCAN 的底层实现
-- 🛡️ **类型安全**：强类型检查，内存安全
-- 📦 **易于集成**：标准 CMake 构建系统
-- 🎯 **专业级**：适用于工业级应用
+- ⚡ **High Performance**: 200Hz control frequency, 1ms latency  
+- 🔧 **Direct Control**: Low-level implementation based on SocketCAN  
+- 🛡️ **Type Safety**: Strong type checking, memory safety  
+- 📦 **Easy Integration**: Standard CMake build system  
+- 🎯 **Professional-Grade**: Suitable for industrial-level applications  
 
-## 系统要求
+## System Requirements
 
-- Linux 系统 (Ubuntu 18.04+, Debian 10+)
-- GCC 7+ 或 Clang 8+
-- CMake 3.12+
-- SocketCAN 支持
+- Linux system (Ubuntu 18.04+, Debian 10+)  
+- GCC 7+ or Clang 8+  
+- CMake 3.12+  
+- SocketCAN support  
 
-## 安装依赖
+## Install Dependencies
 
 ```bash
 # Ubuntu/Debian
 sudo apt-get update
 sudo apt-get install build-essential cmake can-utils
 
-# 使用项目脚本
+# Use project script to install dependencies
 make install-deps
 ```
 
-## 编译
+## Build
 
-### 使用 Makefile
+### Using Makefile
 
 ```bash
-# 编译
+# Build
 make
 
-# 调试版本
+# Debug build
 make debug
 
-# 发布版本
+# Release build
 make release
 
-# 安装到系统
+# Install to system
 sudo make install
 ```
 
-### 使用 CMake
+### Using CMake
 
 ```bash
 mkdir build && cd build
 cmake ..
 make -j$(nproc)
 
-# 可选：安装
+# Optional: install
 sudo make install
 ```
 
-## 使用方法
+## Usage
 
-### 基本使用
+### Basic Usage
 
 ```cpp
 #include "can_interface.h"
@@ -91,19 +91,19 @@ int main(int argc, char* argv[]) {
 }
 ```
 
-### 编译运行
+### Compile and Run
 
 ```bash
-# 编译
+# Build
 make
 
-# 运行（需要 sudo 权限）
+# Run (requires sudo privileges)
 sudo ./build/robstride-mit-position 11
 ```
 
-## API 参考
+## API Reference
 
-### CanInterface 类
+### CanInterface Class
 
 ```cpp
 class CanInterface {
@@ -119,23 +119,23 @@ public:
 };
 ```
 
-### 协议函数
+### Protocol Functions
 
 ```cpp
-// 电机控制
+// Motor control
 bool enable_motor(int socket, int motor_id);
 bool set_mode_raw(int socket, int motor_id, int8_t mode);
 bool write_operation_frame(int socket, int motor_id,
                           double pos, double kp, double kd);
 
-// 参数设置
+// Parameter settings
 bool write_limit(int socket, int motor_id, uint16_t param_id, float limit);
 
-// 状态读取
+// Status reading
 bool read_operation_frame(int socket);
 ```
 
-### 协议常量
+### Protocol Constants
 
 ```cpp
 namespace CommType {
@@ -151,15 +151,15 @@ namespace ControlMode {
 }
 ```
 
-## 控制模式
+## Control Modes
 
-### MIT 模式 (Mode 0)
+### MIT MODE (Mode 0)
 
 ```cpp
-// 切换到 MIT 模式
+// Switch to MIT mode
 set_mode_raw(socket, motor_id, ControlMode::MIT_MODE);
 
-// 发送位置指令
+// Send position command
 double position = M_PI / 2;    // 90度
 double kp = 30.0;              // 位置增益
 double kd = 0.5;               // 阻尼增益
@@ -172,164 +172,164 @@ while (running) {
 }
 ```
 
-### 参数设置
+### Parameter Configuration
 
 ```cpp
-// 设置控制参数
+// Set control parameters
 write_limit(socket, motor_id, ParamID::VELOCITY_LIMIT, 20.0);
 write_limit(socket, motor_id, ParamID::TORQUE_LIMIT, 20.0);
 write_limit(socket, motor_id, ParamID::POSITION_KP, 30.0);
 write_limit(socket, motor_id, ParamID::VELOCITY_KP, 0.5);
 ```
 
-## 交互式控制
+## Interactive Control
 
-程序启动后提供交互式界面：
+After the program starts, an interactive interface is provided:
 
 ```
-🎯 MIT 位置控制台 (ID: 11)
+🎯 MIT Position Control Console (ID: 11)
 ========================================
-👉 输入数字 (度) 回车即可改变位置
-👉 'kp <值>' (例如: kp 100) 来调节刚度
-👉 'kd <值>' (例如: kd 2.0) 来调节阻尼 (防抖)
-👉 '0' 或 'home' 回到零点
-👉 'q' 退出
-⚠️  当前 Kp=100 | Kd=2.0
+👉 Enter a number (degrees) and press Enter to change position
+👉 'kp <value>' (e.g., kp 100) to adjust stiffness
+👉 'kd <value>' (e.g., kd 2.0) to adjust damping (anti-shake)
+👉 '0' or 'home' to return to zero position
+👉 'q' to quit
+⚠️  Current Kp=100 | Kd=2.0
 ----------------------------------------
 [0.0°] >> 90
- -> 目标设定: 90.0°
+ -> Target set: 90.0°
 ```
 
-## 性能优化
+## Performance Optimization
 
-### 编译优化
+### Compile-Time Optimization
 
 ```bash
-# 发布版本（优化）
+# Release build (optimized)
 CXXFLAGS="-O3 -DNDEBUG" make
 
-# 启用 LTO
+# Enable LTO
 cmake -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=TRUE ..
 ```
 
-### 运行时优化
+### Runtime Optimization
 
 ```cpp
-// 高优先级调度
+// High-priority scheduling
 struct sched_param param;
 param.sched_priority = 99;
 sched_setscheduler(0, SCHED_FIFO, &param);
 
-// CPU 亲和性
+// CPU affinity
 cpu_set_t cpuset;
 CPU_ZERO(&cpuset);
-CPU_SET(2, &cpuset);  // 绑定到 CPU 2
+CPU_SET(2, &cpuset);  // Bind CPU 2
 sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
 ```
 
-### 内存优化
+### Memory Optimization
 
 ```cpp
-// 使用对象池
+// se object pool
 std::vector<can_frame> frame_pool;
-frame_pool.reserve(1000);  // 预分配
+frame_pool.reserve(1000);  // Pre-allocate
 
-// 避免动态分配
-uint8_t data[8];  // 栈分配
+// Avoid dynamic allocation
+uint8_t data[8];  // Stack allocation
 ```
 
-## 调试
+## Debugging
 
-### CAN 监控
+### CAN Monitoring
 
 ```bash
-# 监控 CAN 流量
+# Monitor CAN traffic
 sudo candump can0
 
-# 过滤特定 ID
+# Filter specific ID
 sudo candump can0,0C0:7FF
 ```
 
-### 调试输出
+### Debug Output
 
 ```cpp
-// 编译时启用调试
+// Enable debug at compile time
 #ifdef DEBUG
     std::cout << "Debug: " << message << std::endl;
 #endif
 
-// 运行时调试
+// Runtime debugging
 const bool debug = true;
 if (debug) {
     printf("Pos: %.3f, Kp: %.1f, Kd: %.1f\n", pos, kp, kd);
 }
 ```
 
-## 测试
+## Testing
 
-### 单元测试
+### Unit Tests
 
 ```bash
-# 安装 Google Test
+# Install Google Test
 sudo apt-get install libgtest-dev
 
-# 编译测试
+# Build tests
 cmake -DBUILD_TESTING=ON ..
 make
 
-# 运行测试
+# Run tests
 ./tests/robstride_test
 ```
 
-### 集成测试
+### Integration Tests
 
 ```bash
-# 电机连接测试
+# Motor connection test
 make test
 
-# 手动测试
+# Manual test
 sudo ./build/robstride-mit-position --test
 
-# 运行示例程序
+# Run example program
 g++ -std=c++17 -I../include examples/basic_control.cpp -o basic_control
 sudo ./basic_control 11
 ```
 
-## 故障排除
+## Troubleshooting
 
-### 编译错误
+### Compilation Errors
 
 ```bash
-# 检查 C++ 标准
-g++ --version  # 需要 GCC 7+
+# Check C++ standard
+g++ --version  # Requires GCC 7+
 
-# 检查 CMake
-cmake --version  # 需要 3.12+
+# Check CMake
+cmake --version  # Requires 3.12+
 
-# 清理重新编译
+# Clean and rebuild
 make clean
 make
 ```
 
-### 运行时错误
+### Runtime Errors
 
 ```bash
-# 检查 CAN 接口
+# Check CAN interface
 ip link show can0
 
-# 检查权限
-groups  # 应该包含 dialout
+# Check permissions
+groups  # Should include dialout
 
-# 检查设备
+# Check device
 ls -l /sys/class/net/can0
 ```
 
-## 部署
+## Deployment
 
-### 系统服务
+### System Service
 
 ```bash
-# 创建服务文件
+# Create service file
 sudo cp scripts/robstride.service /etc/systemd/system/
 sudo systemctl enable robstride
 sudo systemctl start robstride
@@ -346,15 +346,15 @@ RUN make
 CMD ["./build/robstride-mit-position"]
 ```
 
-## 许可证
+## License
 
 MIT License - 详见 [LICENSE](../LICENSE) 文件
 
-## 贡献
+## Contribution
 
 欢迎提交 Issue 和 Pull Request！
 
-## 支持
+## Support
 
 - 📖 [完整文档](../docs/)
 - 🐛 [问题反馈](https://github.com/tianrking/robstride-control/issues)
