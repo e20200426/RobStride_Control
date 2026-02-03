@@ -121,6 +121,69 @@ bool pp_set_target_rad(int s, int motor_id, float pos_rad) {
     return write_param_f32(s, motor_id, ParamID::POSITION_TARGET, pos_rad);
 }
 
+// Function to read motor status (position, speed, torque, temperature)
+bool read_motor_status(int s, int motor_id) {
+    uint8_t data[8] = {0};  // Prepare buffer to hold data received from the motor
+    uint32_t ext_id = (CommType::READ_PARAMETER << 24) | (HOST_ID << 8) | (uint8_t)motor_id;
+    
+    // Request position data by sending the frame to motor (Type 2)
+    send_frame(s, ext_id, data, 8);  // Assuming send_frame function is defined elsewhere
+
+    // Read response from the motor
+    struct can_frame frame;
+    int nbytes = read(s, &frame, sizeof(frame));
+    if (nbytes <= 0) {
+        std::cerr << "❌ Error reading from CAN bus: " << nbytes << "\n";
+        return false;
+    }
+
+    // Extract the motor feedback data from the response frame
+    uint16_t current_angle = (frame.data[0] << 8) | frame.data[1]; // Byte0~Byte1
+    uint16_t current_speed = (frame.data[2] << 8) | frame.data[3]; // Byte2~Byte3
+    uint16_t current_torque = (frame.data[4] << 8) | frame.data[5]; // Byte4~Byte5
+    uint16_t current_temp = (frame.data[6] << 8) | frame.data[7]; // Byte6~Byte7
+
+    // Convert the data to real-world units based on the datasheet
+    float angle_rad = (current_angle / 65535.0f) * (2 * M_PI) - M_PI;  // Angle: -π to π rad
+    float speed_rad_per_s = (current_speed / 65535.0f) * 66.0f - 33.0f;  // Speed: -33 to 33 rad/s
+    float torque_Nm = (current_torque / 65535.0f) * 28.0f - 14.0f;  // Torque: -14 to 14 N·m
+    float temp_celsius = current_temp / 10.0f;  // Temperature: in Celsius
+
+    std::cout << "Motor ID: " << motor_id << "\n";
+    std::cout << "Angle: " << angle_rad << " rad\n";
+    std::cout << "Speed: " << speed_rad_per_s << " rad/s\n";
+    std::cout << "Torque: " << torque_Nm << " N·m\n";
+    std::cout << "Temperature: " << temp_celsius << " °C\n";
+
+    return true;
+}
+
+// To read the motor fault status (communication type 21)
+bool read_motor_fault(int s, int motor_id) {
+    uint8_t data[8] = {0};  // Prepare buffer to hold fault data
+    uint32_t ext_id = (CommType::READ_PARAMETER << 24) | (HOST_ID << 8) | (uint8_t)motor_id;
+
+    send_frame(s, ext_id, data, 8);  // Send frame to query fault status
+
+    struct can_frame frame;
+    int nbytes = read(s, &frame, sizeof(frame));
+    if (nbytes <= 0) {
+        std::cerr << "❌ Error reading from CAN bus: " << nbytes << "\n";
+        return false;
+    }
+
+    uint32_t fault_status = (frame.data[0] << 24) | (frame.data[1] << 16) | (frame.data[2] << 8) | frame.data[3];
+
+    // Check for faults, based on fault bits
+    if (fault_status & (1 << 0)) std::cout << "Motor overtemperature detected.\n";
+    if (fault_status & (1 << 3)) std::cout << "Motor encoder uncalibrated.\n";
+    if (fault_status & (1 << 8)) std::cout << "Motor hardware identification fault.\n";
+    // Add additional checks for other fault conditions as needed...
+
+    return true;
+}
+
+
 // ================== SIGNAL ====================
 void signal_handler(int) {
     std::cout << "\n🛑 Exit signal received\n";
@@ -144,9 +207,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // ---- According to manual PP steps:
-    // runmode=1 while disabled -> enable -> set vel_max -> set acc_set -> set loc_ref :contentReference[oaicite:15]{index=15}
-
     std::cout << "🛑 Stop/reset motor...\n";
     stop_motor(s, motor_id);
     std::this_thread::sleep_for(300ms);
@@ -163,81 +223,32 @@ int main(int argc, char* argv[]) {
     }
     std::this_thread::sleep_for(300ms);
 
-    // NOTE: manual says PP does NOT support changing speed/acc during operation.
-    // So set these once (or re-set before the next move if you want). :contentReference[oaicite:16]{index=16}
+    // Set parameters (optional)
     float vel_max = 20.0f;   // rad/s
     float acc_set = 10.0f;  // rad/s^2
-
-    std::cout << "⚙️ Set vel_max=" << vel_max << " rad/s\n";
     write_param_f32(s, motor_id, ParamID::PP_VELOCITY_MAX, vel_max);
     std::this_thread::sleep_for(50ms);
-
-    std::cout << "⚙️ Set acc_set=" << acc_set << " rad/s^2\n";
     write_param_f32(s, motor_id, ParamID::PP_ACCELERATION_TARGET, acc_set);
     std::this_thread::sleep_for(50ms);
 
-    std::cout << "✅ Ready (Private Protocol PP)\n";
-    std::cout << "----------------------------------\n";
-    std::cout << "👉 Enter angle in degrees\n";
-    std::cout << "👉 'vel <rad/s>' to change vel_max (writes param)\n";
-    std::cout << "👉 'acc <rad/s2>' to change acc_set (writes param)\n";
-    std::cout << "👉 'home' or '0' -> 0°\n";
-    std::cout << "👉 'q' -> quit\n";
-    std::cout << "----------------------------------\n";
-
-    std::string line;
+    // Start reading the motor status in a loop
+    std::cout << "✅ Ready to read motor status...\n";
     while (running) {
-        std::cout << ">> ";
-        if (!std::getline(std::cin, line)) break;
-
-        if (line == "q" || line == "quit" || line == "exit") {
-            running = false;
-            break;
+        // Optionally add a delay between each status check
+        std::this_thread::sleep_for(1s);  // Read status every 1 second
+        
+        // Read and print the motor status
+        if (!read_motor_status(s, motor_id)) {
+            std::cerr << "❌ Failed to read motor status\n";
         }
 
-        if (line == "home" || line == "0") {
-            pp_set_target_rad(s, motor_id, 0.0f);
-            std::cout << "🏠 Move to 0° (loc_ref=0 rad)\n";
-            continue;
-        }
-
-        // optional: allow user to write vel/acc (manual warns this is not supported "during operation",
-        // but you can still write; some firmware accepts it, some ignores it). :contentReference[oaicite:17]{index=17}
-        if (line.rfind("vel ", 0) == 0) {
-            try {
-                vel_max = std::stof(line.substr(4));
-                write_param_f32(s, motor_id, ParamID::PP_VELOCITY_MAX, vel_max);
-                std::cout << "✅ vel_max updated: " << vel_max << " rad/s\n";
-            } catch (...) {
-                std::cout << "❌ usage: vel 5.0\n";
-            }
-            continue;
-        }
-        if (line.rfind("acc ", 0) == 0) {
-            try {
-                acc_set = std::stof(line.substr(4));
-                write_param_f32(s, motor_id, ParamID::PP_ACCELERATION_TARGET, acc_set);
-                std::cout << "✅ acc_set updated: " << acc_set << " rad/s^2\n";
-            } catch (...) {
-                std::cout << "❌ usage: acc 10.0\n";
-            }
-            continue;
-        }
-
-        // angle command
-        try {
-            float deg = std::stof(line);
-            deg = std::max(-720.0f, std::min(720.0f, deg));
-            float rad = deg * (float)M_PI / 180.0f;
-
-            // PP command = write loc_ref (rad)
-            pp_set_target_rad(s, motor_id, rad);
-            std::cout << "➡ Target: " << deg << "°  (loc_ref=" << rad << " rad)\n";
-        } catch (...) {
-            std::cout << "❌ Invalid input\n";
+        // Read and print the motor fault status
+        if (!read_motor_fault(s, motor_id)) {
+            std::cerr << "❌ Failed to read motor fault status\n";
         }
     }
 
+    // Ensure motor stops before exiting
     std::cout << "🏁 Returning home...\n";
     pp_set_target_rad(s, motor_id, 0.0f);
     std::this_thread::sleep_for(800ms);

@@ -25,11 +25,15 @@ add_executable(mit-position
 add_executable(position_control 
     src/PP_control.cpp)
 
+add_executable(read_position 
+    src/read_pos.cpp)
+
 # Link libraries
 target_link_libraries(mit-position pthread)
 target_link_libraries(position_control pthread)
+target_link_libraries(read_position pthread)
 # Installation
-install(TARGETS mit-position position_control
+install(TARGETS mit-position position_control read_position
     RUNTIME DESTINATION bin
 )
 
