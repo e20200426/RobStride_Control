@@ -45,7 +45,7 @@ cd robstride_ros2
 
 ```bash
 # Source your ROS2 distro first
-source /opt/ros/<distro>/setup.bash   # e.g. humble, iron, jazzy
+source /opt/ros/humble/setup.bash 
 
 cd robstride_ros2
 colcon build --packages-select rob_py
@@ -56,7 +56,7 @@ source install/setup.bash
 
 ## CAN interface setup
 
-Every node **automatically** runs:
+Every node **AUTOMATICALLY** runs:
 
 ```bash
 sudo ip link set can0 type can bitrate 1000000

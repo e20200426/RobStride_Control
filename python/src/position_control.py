@@ -24,8 +24,8 @@ try:
 except ImportError:
     # 假设当前目录结构
     try:
-        from bus import RobstrideBus, Motor
-        from protocol import ParameterType, CommunicationType
+        from robstride_dynamics.bus import RobstrideBus, Motor
+        from robstride_dynamics.protocol import ParameterType, CommunicationType
     except ImportError as e:
         print(f"❌ 无法导入 SDK: {e}")
         sys.exit(1)
@@ -132,7 +132,7 @@ class PositionControllerMIT:
             try:
                 with self.lock:
                     # 1. 发送 MIT 帧 (只发)
-                    self.bus.write_operation_frame(
+                    self.bus.control_mit(
                         self.motor_name,
                         self.target_position,
                         self.kp,
@@ -190,7 +190,7 @@ class PositionControllerMIT:
                 with self.lock:
                     # 回到零位
                     print("🏠 回到零位...")
-                    self.bus.write_operation_frame(self.motor_name, 0.0, self.kp, self.kd, 0.0, 0.0)
+                    self.bus.control_mit(self.motor_name, 0.0, self.kp, self.kd, 0.0, 0.0)
                     time.sleep(1.0) # 等待电机移动
                     # 禁用
                     print("🚫 禁用电机...")

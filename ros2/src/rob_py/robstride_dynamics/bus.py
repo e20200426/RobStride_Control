@@ -23,7 +23,12 @@ from .table import (
     MODEL_MIT_KP_TABLE,
     MODEL_MIT_KD_TABLE,
 )
+<<<<<<< HEAD
+from .protocol import CommunicationType
+
+=======
 from .protocol import CommunicationType, ParameterType
+>>>>>>> e078198 (add readme)
 
 Value: TypeAlias = int | float
 
@@ -469,6 +474,8 @@ class RobstrideBus:
 
         self.transmit(CommunicationType.OPERATION_CONTROL, torque_u16, device_id, data)
 
+<<<<<<< HEAD
+=======
     def control_vel(
         self,
         motor: str,
@@ -501,6 +508,7 @@ class RobstrideBus:
         self.write(motor, ParameterType.VELOCITY_TARGET, float(vel))
         return self.receive_status_frame(motor)
 
+>>>>>>> e078198 (add readme)
     def read_operation_frame(self, motor: str) -> tuple[float, float, float, float]:
         """
         Receive the MIT status frame from the motor.

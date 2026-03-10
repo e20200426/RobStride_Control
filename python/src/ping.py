@@ -31,7 +31,7 @@ except ImportError:
     # 2. 尝试从本地文件导入 (如果 SDK 未安装)
     try:
         print("未找到 'robstride_dynamics' 包, 尝试从本地文件导入...")
-        from bus import RobstrideBus
+        from robstride_dynamics.bus import RobstrideBus
     except ImportError as e:
         print(f"❌ 无法导入 RobstrideBus SDK: {e}")
         print("请确保此脚本的上一级目录是 SDK 的根目录,")

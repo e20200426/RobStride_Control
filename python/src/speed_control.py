@@ -22,8 +22,8 @@ try:
 except ImportError:
     # 假设当前目录结构
     try:
-        from bus import RobstrideBus, Motor
-        from protocol import ParameterType
+        from robstride_dynamics.bus import RobstrideBus, Motor
+        from robstride_dynamics.protocol import ParameterType
     except ImportError as e:
         print(f"❌ 无法导入 SDK: {e}")
         sys.exit(1)
@@ -46,6 +46,10 @@ class SpeedController:
         self.max_velocity = 20.0  # rad/s 安全限制
         self.kp = 2.0
         self.ki = 0.5
+        self.accel_limit = 10.0   # rad/s² — 加速度限制，防止电流冲击
+
+        self._cmd_velocity = 0.0  # 当前已发送的速度指令（经过斜坡处理）
+        self._last_sent_velocity: Optional[float] = None  # 脏标志：避免重复写相同值
 
     def _signal_handler(self, signum, frame):
         self.stop_and_exit()
@@ -55,7 +59,7 @@ class SpeedController:
         
         # 定义电机
         motors = {
-            self.motor_name: Motor(id=self.motor_id, model="rs-06") # 模型型号请根据实际修改
+            self.motor_name: Motor(id=self.motor_id, model="rs-00") # 模型型号请根据实际修改
         }
         
         # 简单的校准参数
@@ -72,18 +76,17 @@ class SpeedController:
             self.bus.enable(self.motor_name)
             time.sleep(0.5)
 
-            # 设置为速度模式 (Mode 2)
-            print("⚙️ 设置为速度控制模式 (Mode 2)...")
-            self.bus.write(self.motor_name, ParameterType.MODE, 2)
-            
-            # 初始化 PID 和限制
-            print("⚙️ 写入控制参数...")
-            self.bus.write(self.motor_name, ParameterType.VELOCITY_LIMIT, self.max_velocity)
-            self.bus.write(self.motor_name, ParameterType.VELOCITY_KP, self.kp)
-            self.bus.write(self.motor_name, ParameterType.VELOCITY_KI, self.ki)
-            
-            # 归零目标
-            self.bus.write(self.motor_name, ParameterType.VELOCITY_TARGET, 0.0)
+            # 设置模式、PID、限速并归零 —— control_vel 一次完成
+            print("⚙️ 设置速度控制模式并写入参数...")
+            self.bus.control_vel(
+                self.motor_name,
+                vel=0.0,
+                kp=self.kp,
+                ki=self.ki,
+                max_velocity=self.max_velocity,
+            )
+            self._cmd_velocity = 0.0
+            self._last_sent_velocity = 0.0
             
             self.connected = True
             print("✅ 初始化完成！")
@@ -96,25 +99,37 @@ class SpeedController:
     def loop(self):
         """控制线程：持续发送心跳/速度指令并读取状态"""
         print("🔄 控制循环已启动")
-        
+        LOOP_DT = 0.05  # 20 Hz 目标周期
+
         while self.running and self.connected:
+            t_start = time.perf_counter()
             try:
                 with self.lock:
-                    # 在 Mode 2 下，我们需要写入 VELOCITY_TARGET
-                    # bus.write 会等待回包 (receive_status_frame)，所以这本身就是一种状态读取
-                    # Protocol 0x700A = VELOCITY_TARGET
-                    
-                    self.bus.write(self.motor_name, ParameterType.VELOCITY_TARGET, self.target_velocity)
-                    
-                    # 如果想读取更详细的状态（如当前扭矩），可以使用 read_operation_frame
-                    # 但 write 的回包里其实已经包含 status 数据了，SDK 的 write 内部调用了 receive_status_frame
-                    # 这里我们不做额外的读取以保持高频率
-                    
-                time.sleep(0.05) # 20Hz 刷新率，防止总线拥堵
-                
+                    # ── 速度斜坡：以 accel_limit 逐步逼近目标，避免突变
+                    delta = self.target_velocity - self._cmd_velocity
+                    max_step = self.accel_limit * LOOP_DT
+                    if abs(delta) <= max_step:
+                        self._cmd_velocity = self.target_velocity
+                    else:
+                        self._cmd_velocity += max_step * (1 if delta > 0 else -1)
+
+                    # ── 脏标志：只在值变化时才发送 CAN 帧
+                    if self._cmd_velocity != self._last_sent_velocity:
+                        self.bus.write(
+                            self.motor_name,
+                            ParameterType.VELOCITY_TARGET,
+                            self._cmd_velocity,
+                        )
+                        self._last_sent_velocity = self._cmd_velocity
+
             except Exception as e:
                 print(f"⚠️ 通信错误: {e}")
-                time.sleep(0.5)
+
+            # ── 精确定时：补偿本次循环耗时，维持稳定 20 Hz
+            elapsed = time.perf_counter() - t_start
+            sleep_time = LOOP_DT - elapsed
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
     def set_velocity(self, vel: float):
         """设置目标速度（带限幅）"""
