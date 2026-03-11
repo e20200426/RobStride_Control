@@ -1,45 +1,30 @@
 #!/usr/bin/env python3
 """
-mit_control_node.py
+vel_control_node.py
 -------------------
-Minimal MIT-mode (Mode 0) motor control — no ROS topics.
+Minimal velocity-mode (Mode 2) motor control — no ROS topics.
 Edit the constants below, then run:
 
-    ros2 run rob_py mit_control_node
+    ros2 run rob_py vel_control_node
 """
 
 import signal
-import struct
 import threading
 import time
 
 import rclpy
 
 from rob_py.can_setup import setup_can_interface
-from robstride_dynamics import RobstrideBus, Motor, ParameterType, CommunicationType
+from robstride_dynamics import RobstrideBus, Motor
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-CAN_CHANNEL  = 'can0'
-BITRATE      = 1_000_000   # bps
-MOTOR_ID     = 3
-MOTOR_MODEL  = 'rs-00'
-KP           = 30.0        # stiffness  Nm/rad
-KD           = 5.0         # damping    Nm·s/rad
-LOOP_RATE_HZ = 100         # control loop frequency
+CAN_CHANNEL    = 'can0'
+BITRATE        = 1_000_000   # bps
+MOTOR_ID       = 3
+MOTOR_MODEL    = 'rs-00'
+TORQUE_LIMIT   = 2.0         # A  — max current in velocity mode
+LOOP_RATE_HZ   = 100         # control loop frequency
 # ──────────────────────────────────────────────────────────────────────────────
-
-
-def set_mit_mode(bus: RobstrideBus, motor_name: str):
-    param_id, _dtype, _ = ParameterType.MODE
-    value_buffer = struct.pack('<bBH', 0, 0, 0)
-    data = struct.pack('<HH', param_id, 0x00) + value_buffer
-    bus.transmit(
-        CommunicationType.WRITE_PARAMETER,
-        bus.host_id,
-        bus.motors[motor_name].id,
-        data,
-    )
-    time.sleep(0.1)
 
 
 def main(args=None):
@@ -56,14 +41,13 @@ def main(args=None):
 
     bus = RobstrideBus(CAN_CHANNEL, motors, calibration)
     bus.connect(handshake=True)
-    bus.enable(motor_name)
-    time.sleep(0.5)
 
-    set_mit_mode(bus, motor_name)
-    print(f"[INFO] MIT mode active — motor {MOTOR_ID} on {CAN_CHANNEL}")
+    bus.set_velocity_mode(motor_name, torque_limit=TORQUE_LIMIT)
+
+    print(f"[INFO] Velocity mode active — motor {MOTOR_ID} on {CAN_CHANNEL}")
 
     running = True
-    target_position = 0.0   # start at zero
+    target_velocity = 0.0   # rad/s
 
     def _shutdown(sig, frame):
         nonlocal running
@@ -73,18 +57,18 @@ def main(args=None):
     signal.signal(signal.SIGTERM, _shutdown)
 
     def _input_thread():
-        nonlocal target_position, running
-        print("Enter target position in rad (or 'q' to quit):")
+        nonlocal target_velocity, running
+        print("Enter target velocity in rad/s (or 'q' to quit):")
         while running:
             try:
                 line = input("> ").strip()
                 if line.lower() == 'q':
                     running = False
                     break
-                target_position = float(line)
-                print(f"  → target set to {target_position:.4f} rad")
+                target_velocity = float(line)
+                print(f"  → target set to {target_velocity:.4f} rad/s")
             except ValueError:
-                print("  Invalid input. Enter a number in radians.")
+                print("  Invalid input. Enter a number in rad/s.")
             except EOFError:
                 running = False
                 break
@@ -96,16 +80,7 @@ def main(args=None):
 
     while running:
         try:
-            bus.control_mit(
-                motor_name,
-                position=target_position,
-                velocity=0.0,
-                kp=KP,
-                kd=KD,
-                torque=0.0,
-            )
-
-            pos, vel, trq, temp = bus.read_operation_frame(motor_name)
+            pos, vel, trq, temp = bus.control_velocity(motor_name, target_velocity)
             print(
                 f"\r  pos={pos:+.4f} rad  vel={vel:+.4f} rad/s  "
                 f"trq={trq:+.4f} Nm  temp={temp:.1f}°C   ",
@@ -118,8 +93,7 @@ def main(args=None):
 
     print("\n[INFO] Stopping motor ...")
     try:
-        bus.control_mit(motor_name, position=0.0, velocity=0.0,
-                        kp=0.0, kd=KD, torque=0.0)
+        bus.control_velocity(motor_name, 0.0)
         time.sleep(0.1)
         bus.disable(motor_name)
         bus.disconnect()
